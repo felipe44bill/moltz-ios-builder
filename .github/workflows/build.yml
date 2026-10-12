@@ -1,0 +1,66 @@
+name: Compilação iOS gratuita com transporte criptografado
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release com o pacote criptografado
+        required: true
+        type: string
+      sha256:
+        description: SHA256 do pacote criptografado
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preparar transporte criptografado
+        shell: bash
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pyenv"
+          "$RUNNER_TEMP/pyenv/bin/python" -m pip install 'cryptography>=46,<51'
+          echo "PYTHON_BIN=$RUNNER_TEMP/pyenv/bin/python" >> "$GITHUB_ENV"
+      - name: Obter e abrir o pacote no runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IOS_BUILD_KEY: ${{ secrets.IOS_BUILD_KEY }}
+          INPUT_TAG: ${{ inputs.tag }}
+          EXPECTED_SHA256: ${{ inputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$INPUT_TAG" =~ ^build-[a-zA-Z0-9-]+$ ]]
+          [[ "$EXPECTED_SHA256" =~ ^[a-fA-F0-9]{64}$ ]]
+          gh release download "$INPUT_TAG" --repo "$GITHUB_REPOSITORY" --pattern input.aes
+          printf '%s  %s\n' "$EXPECTED_SHA256" input.aes | shasum -a 256 -c -
+          "$PYTHON_BIN" seal.py decrypt input.aes "$RUNNER_TEMP/input.zip"
+          ditto -x -k "$RUNNER_TEMP/input.zip" "$RUNNER_TEMP/native"
+      - name: Compilar sem assinatura
+        id: compilar
+        continue-on-error: true
+        env:
+          IOS_BUILD_KEY: ${{ secrets.IOS_BUILD_KEY }}
+        shell: bash
+        run: '"$PYTHON_BIN" run.py "$RUNNER_TEMP/native/Moltz-iOS" "$RUNNER_TEMP/ipa"'
+      - name: Guardar somente resultado criptografado
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          if [[ -f resultado.aes ]]; then
+            gh release upload "$INPUT_TAG" resultado.aes --repo "$GITHUB_REPOSITORY" --clobber
+          fi
+      - name: Confirmar sucesso da compilação
+        if: steps.compilar.outcome != 'success'
+        run: exit 1
