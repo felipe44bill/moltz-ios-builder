@@ -21,7 +21,14 @@ with zipfile.ZipFile(origem) as entrada, zipfile.ZipFile(destino, 'w', compressi
         if '/_CodeSignature/' in info.filename or info.filename.endswith('/embedded.mobileprovision'):
             continue
         if info.filename.endswith('Info.plist'):
-            dados = plistlib.dumps(plistlib.loads(dados), fmt=plistlib.FMT_XML, sort_keys=False)
+            plist = plistlib.loads(dados)
+            if info.filename == raiz + 'Info.plist':
+                # Sideloadly 0.70.1 deduplica o plist e escolhe referências de
+                # 1 byte para exatamente 256 objetos. CoreFoundation rejeita
+                # esse limite (numObjects >= 2 ** (8 * objectRefSize)).
+                # Dois objetos exclusivos afastam este build desse limite.
+                plist['MoltzPackagingRevision'] = 'sideloadly-bplist-boundary-3'
+            dados = plistlib.dumps(plist, fmt=plistlib.FMT_XML, sort_keys=False)
             info.compress_type = zipfile.ZIP_STORED
             alterados.append(info.filename)
         info.create_system = 3
