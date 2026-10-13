@@ -27,7 +27,7 @@ if [[ ! -d "$app" ]]; then
 fi
 executavel="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")"
 file "$app/$executavel" | tee "$saida/binario.log"
-lipo -verify_arch arm64 "$app/$executavel"
+lipo "$app/$executavel" -verify_arch arm64
 mkdir -p "$temporario/Payload"
 ditto "$app" "$temporario/Payload/Moltz.app"
 (cd "$temporario" && zip -qry "$saida/Moltz-Sideloadly.ipa" Payload)
