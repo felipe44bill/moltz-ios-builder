@@ -30,7 +30,10 @@ file "$app/$executavel" | tee "$saida/binario.log"
 lipo "$app/$executavel" -verify_arch arm64
 mkdir -p "$temporario/Payload"
 ditto "$app" "$temporario/Payload/Moltz.app"
-(cd "$temporario" && zip -qry "$saida/Moltz-Sideloadly.ipa" Payload)
+(cd "$temporario" && zip -qry "$saida/Moltz-base.ipa" Payload)
+ferramentas="$(cd "$(dirname "$0")" && pwd)"
+"${PYTHON_BIN:-python3}" "$ferramentas/compatibilizar-ipa.py" "$saida/Moltz-base.ipa" "$saida/Moltz-Sideloadly.ipa"
+rm -f "$saida/Moltz-base.ipa"
 unzip -tq "$saida/Moltz-Sideloadly.ipa"
 shasum -a 256 "$saida/Moltz-Sideloadly.ipa" > "$saida/SHA256.txt"
 echo "IPA gerado: $saida/Moltz-Sideloadly.ipa"
